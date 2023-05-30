@@ -10,4 +10,4 @@ none yet.
 
 ## TODO
 
-- finish
+- Add technical details.

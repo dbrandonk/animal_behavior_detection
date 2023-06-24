@@ -28,42 +28,6 @@ class FocalLoss(torch.nn.Module):
 
         return loss
 
-class MeanMeter(object):
-
-  def __init__(self):
-    self.reset()
-
-  def reset(self):
-    self.val = 0
-    self.mean = 0
-    self.sum = 0
-    self.count = 0
-
-  def update(self, val, n=1):
-    self.val = val
-    self.sum += val * n
-    self.count += n
-    self.mean = self.sum / self.count
-
-class Network(torch.nn.Module):
-    def __init__(self):
-        super(Network, self).__init__()
-
-        self.fc1 = torch.nn.Linear(28, 512)
-        self.fc2 = torch.nn.Linear(512, 512)
-        self.fc3 = torch.nn.Linear(512, 512)
-        self.fc4 = torch.nn.Linear(512, 4)
-
-    def forward(self, x):
-
-        outs = torch.flatten(x, 1)
-        outs = torch.nn.functional.relu(self.fc1(outs))
-        outs = torch.nn.functional.relu(self.fc2(outs))
-        outs = torch.nn.functional.relu(self.fc3(outs))
-        outs = self.fc4(outs)
-
-        return outs
-
 def cb_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gamma):
     """
     Compute the Class Balanced Loss between `logits` and the ground truth `labels`.
@@ -101,8 +65,6 @@ def cb_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
 def data_loader_mars(batch_size, strat):
 
     train_data = np.load('data/aicrowd1/train.npy',allow_pickle=True).item()
-    test = np.load('data/aicrowd1/test.npy',allow_pickle=True).item()
-    sample_submission = np.load('data/aicrowd1/sample_submission.npy',allow_pickle=True).item()
 
     data = None
     target = None
@@ -190,149 +152,6 @@ def focal_loss(labels, logits, alpha, gamma):
 
     focal_loss /= torch.sum(labels)
     return focal_loss
-
-def plot_perf(perf_data, strat):
-
-    perf_data = np.array(perf_data)
-    train_losses, train_accs, train_cls_accs, train_f1s, train_precs, val_losses, val_accs, val_cls_accs, val_f1s, val_precs, random_accs, random_f1s, random_precs = perf_data
-
-    if (strat == 'cbfl'):
-        title = 'CLASS BALANCED FOCAL LOSS'
-    elif (strat == 'weighted_samp'):
-        title = 'WEIGHTED SAMPLING'
-    elif (strat == 'none'):
-        title = 'NONE'
-
-    plt.plot(train_losses)
-    plt.plot(val_losses)
-    plt.legend(['train', 'validation'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('LOSS')
-    plt.title(title)
-    plt.savefig('./plots/' + strat + '_model_loss.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-    plt.plot(train_accs)
-    plt.plot(val_accs)
-    plt.plot(random_accs)
-    plt.legend(['train', 'validation', 'random'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('ACCURACY')
-    plt.title(title)
-    plt.ylim(0, 1)
-    plt.savefig('./plots/' + strat + '_model_acc.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-    plt.plot(train_f1s)
-    plt.plot(val_f1s)
-    plt.plot(random_f1s)
-    plt.legend(['train', 'validation', 'random'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('F1')
-    plt.title(title)
-    plt.ylim(0, 1)
-    plt.savefig('./plots/' + strat + '_model_f1.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-    plt.plot(train_precs)
-    plt.plot(val_precs)
-    plt.plot(random_precs)
-    plt.legend(['train', 'validation', 'random'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('PRECISION')
-    plt.title(title)
-    plt.ylim(0, 1)
-    plt.savefig('./plots/' + strat + '_model_prec.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-    plt.plot([row[0] for row in train_cls_accs])
-    plt.plot([row[1] for row in train_cls_accs])
-    plt.plot([row[2] for row in train_cls_accs])
-    plt.plot([row[3] for row in train_cls_accs])
-    plt.legend(['class 0', 'class 1', 'class 2', 'class 3'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('ACCURACY PER CLASS')
-    plt.title(title + ' TRAIN')
-    plt.ylim(0, 1)
-    plt.savefig('./plots/' + strat + '_train_per_class_acc.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-    plt.plot([row[0] for row in val_cls_accs])
-    plt.plot([row[1] for row in val_cls_accs])
-    plt.plot([row[2] for row in val_cls_accs])
-    plt.plot([row[3] for row in val_cls_accs])
-    plt.legend(['class 0', 'class 1', 'class 2', 'class 3'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('ACCURACY PER CLASS')
-    plt.title(title + ' VALIDATION')
-    plt.ylim(0, 1)
-    plt.savefig('./plots/' + strat + '_val_per_class_acc.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-def plot_perf_comp(perf_data):
-
-    perf_data = np.array(perf_data)
-    cbfl_f1s, cbfl_precs, cbfl_run_time, ws_f1s, ws_precs, ws_run_time, none_f1s, none_precs, none_run_time, random_f1s, random_precs = perf_data
-
-    plt.plot(cbfl_f1s)
-    plt.plot(ws_f1s)
-    plt.plot(none_f1s)
-    plt.plot(random_f1s)
-    plt.legend(['CBFL', 'WEIGHTED', 'NONE', 'RANDOM'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('F1')
-    plt.title('F1 COMPARISON')
-    plt.ylim(0, 1)
-    plt.savefig('./plots/comp_model_f1.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-    plt.plot(cbfl_precs)
-    plt.plot(ws_precs)
-    plt.plot(none_precs)
-    plt.plot(random_precs)
-    plt.legend(['CBFL', 'WEIGHTED', 'NONE', 'RANDOM'], loc='best')
-    plt.xlabel('EPOCH')
-    plt.ylabel('PRECISION')
-    plt.title('PRECISION COMPARISON')
-    plt.ylim(0, 1)
-    plt.savefig('./plots/comp_model_prec.png')
-    plt.close()
-    plt.cla()
-    plt.clf()
-
-def random_perf(val_loader, num_classes):
-
-    accs = MeanMeter()
-    f1s = MeanMeter()
-    precs = MeanMeter()
-
-    for idx, (data, target) in enumerate(val_loader):
-
-        preds = np.random.randint(0, num_classes, target.shape[0])
-
-        acc = sklearn.metrics.accuracy_score(target, preds)
-        f1 = sklearn.metrics.f1_score(target, preds, average='macro')
-        prec = sklearn.metrics.precision_score(target, preds, average='macro', zero_division=0)
-
-        accs.update(acc, preds.shape[0])
-        f1s.update(f1, preds.shape[0])
-        precs.update(prec, preds.shape[0])
-
-    return accs.mean, f1s.mean, precs.mean
 
 def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None, momentum=None, beta=None, gamma=None, strat=None):
 

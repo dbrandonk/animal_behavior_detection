@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "animal_behavior_detection"
+version = "0.0.1"
+authors = [
+  { name="Brandon Knape", email="d.brandonk@gmail.com" },
+]
+description = "animal_behavior_detection"
+readme = "README.md"
+requires-python = ">=3.7"
+
+dependencies = [
+    'torch',
+]

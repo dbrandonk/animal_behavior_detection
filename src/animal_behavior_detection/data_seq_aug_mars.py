@@ -2,7 +2,7 @@ import numpy as np
 
 def data_aug_mars():
 
-    train_data = np.load('data/aicrowd1/train.npy',allow_pickle=True).item()
+    train_data = np.load('data/train.npy',allow_pickle=True).item()
 
     SEQ_LEN = 90
 
@@ -30,8 +30,8 @@ def data_aug_mars():
             data = np.concatenate((data, seq_list), axis = 0)
             target = np.concatenate((target, annot), axis = 0)
 
-    np.save('data/aicrowd1/train_seq_data.npy', data)
-    np.save('data/aicrowd1/train_seq_target.npy', target)
+    np.save('data/train_seq_data.npy', data)
+    np.save('data/train_seq_target.npy', target)
 
 if __name__ == '__main__':
     data_aug_mars()

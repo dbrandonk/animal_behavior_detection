@@ -8,6 +8,7 @@ import time
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 
+
 class FocalLoss(torch.nn.Module):
 
     def __init__(self, samples_per_cls, no_of_classes, beta, gamma):
@@ -24,26 +25,35 @@ class FocalLoss(torch.nn.Module):
         :return: loss
         """
 
-        loss = cb_loss(target, input, self.samples_per_cls, self.no_of_classes, 'focal', self.beta, self.gamma)
+        loss = cb_loss(
+            target,
+            input,
+            self.samples_per_cls,
+            self.no_of_classes,
+            'focal',
+            self.beta,
+            self.gamma)
 
         return loss
 
+
 class MeanMeter(object):
 
-  def __init__(self):
-    self.reset()
+    def __init__(self):
+        self.reset()
 
-  def reset(self):
-    self.val = 0
-    self.mean = 0
-    self.sum = 0
-    self.count = 0
+    def reset(self):
+        self.val = 0
+        self.mean = 0
+        self.sum = 0
+        self.count = 0
 
-  def update(self, val, n=1):
-    self.val = val
-    self.sum += val * n
-    self.count += n
-    self.mean = self.sum / self.count
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.mean = self.sum / self.count
+
 
 class Network(torch.nn.Module):
     def __init__(self):
@@ -64,7 +74,9 @@ class Network(torch.nn.Module):
 
         return outs
 
-def cb_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gamma):
+
+def cb_loss(labels, logits, samples_per_cls,
+            no_of_classes, loss_type, beta, gamma):
     """
     Compute the Class Balanced Loss between `logits` and the ground truth `labels`.
     Class Balanced Loss: ((1-beta)/(1-beta^n))*Loss(labels, logits)
@@ -89,18 +101,19 @@ def cb_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
 
     weights = torch.tensor(weights).float()
     weights = weights.unsqueeze(0)
-    weights = weights.repeat(labels_one_hot.shape[0],1) * labels_one_hot
+    weights = weights.repeat(labels_one_hot.shape[0], 1) * labels_one_hot
     weights = weights.sum(1)
     weights = weights.unsqueeze(1)
-    weights = weights.repeat(1,no_of_classes)
+    weights = weights.repeat(1, no_of_classes)
 
     cb_loss = focal_loss(labels_one_hot, logits, weights, gamma)
 
     return cb_loss
 
+
 def data_loader_mars(batch_size, strat):
 
-    train_data = np.load('data/train.npy',allow_pickle=True).item()
+    train_data = np.load('data/train.npy', allow_pickle=True).item()
 
     data = None
     target = None
@@ -113,7 +126,7 @@ def data_loader_mars(batch_size, strat):
             data = kp.copy()
             target = annot.copy()
         else:
-            data = np.concatenate((data, kp), axis = 0)
+            data = np.concatenate((data, kp), axis=0)
             target = np.concatenate((target, annot), axis=0)
 
     shuf = np.random.permutation(data.shape[0])
@@ -134,7 +147,8 @@ def data_loader_mars(batch_size, strat):
         weight = 1. / class_sample_count
         samples_weight = np.array([weight[target_train]])
         samples_weight = samples_weight.squeeze(0)
-        sampler = torch.utils.data.WeightedRandomSampler(samples_weight, len(samples_weight))
+        sampler = torch.utils.data.WeightedRandomSampler(
+            samples_weight, len(samples_weight))
 
     data_train = torch.Tensor(data_train)
     target_train = torch.Tensor(target_train)
@@ -146,16 +160,23 @@ def data_loader_mars(batch_size, strat):
 
     dataset_train = TensorDataset(data_train, target_train)
 
-
     if strat == 'weighted_samp':
-        dataloader_train = DataLoader(dataset_train, batch_size=batch_size, sampler=sampler)
+        dataloader_train = DataLoader(
+            dataset_train,
+            batch_size=batch_size,
+            sampler=sampler)
     else:
-        dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+        dataloader_train = DataLoader(
+            dataset_train, batch_size=batch_size, shuffle=True)
 
     dataset_val = TensorDataset(data_val, target_val)
-    dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
+    dataloader_val = DataLoader(
+        dataset_val,
+        batch_size=batch_size,
+        shuffle=True)
 
     return dataloader_train, dataloader_val, class_sample_count
+
 
 def focal_loss(labels, logits, alpha, gamma):
     """
@@ -173,13 +194,14 @@ def focal_loss(labels, logits, alpha, gamma):
       focal_loss: A float32 scalar representing normalized total loss.
     """
 
-    BCLoss = torch.nn.functional.binary_cross_entropy_with_logits(input = logits, target = labels,reduction = "none")
+    BCLoss = torch.nn.functional.binary_cross_entropy_with_logits(
+        input=logits, target=labels, reduction="none")
 
     if gamma == 0.0:
         modulator = 1.0
     else:
-        modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(1 +
-            torch.exp(-1.0 * logits)))
+        modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(
+            1 + torch.exp(-1.0 * logits)))
 
     loss = modulator * BCLoss
 
@@ -188,6 +210,7 @@ def focal_loss(labels, logits, alpha, gamma):
 
     focal_loss /= torch.sum(labels)
     return focal_loss
+
 
 def plot_perf(perf_data, strat):
 
@@ -279,6 +302,7 @@ def plot_perf(perf_data, strat):
     plt.cla()
     plt.clf()
 
+
 def plot_perf_comp(perf_data):
 
     perf_data = np.array(perf_data)
@@ -312,6 +336,7 @@ def plot_perf_comp(perf_data):
     plt.cla()
     plt.clf()
 
+
 def random_perf(val_loader, num_classes):
 
     accs = MeanMeter()
@@ -324,7 +349,8 @@ def random_perf(val_loader, num_classes):
 
         acc = sklearn.metrics.accuracy_score(target, preds)
         f1 = sklearn.metrics.f1_score(target, preds, average='macro')
-        prec = sklearn.metrics.precision_score(target, preds, average='macro', zero_division=0)
+        prec = sklearn.metrics.precision_score(
+            target, preds, average='macro', zero_division=0)
 
         accs.update(acc, preds.shape[0])
         f1s.update(f1, preds.shape[0])
@@ -332,9 +358,13 @@ def random_perf(val_loader, num_classes):
 
     return accs.mean, f1s.mean, precs.mean
 
-def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None, momentum=None, beta=None, gamma=None, strat=None):
 
-    dataloader_train, dataloader_val, class_sample_count = data_loader_mars(batch_size, strat)
+def run(batch_size=None, epochs=None, learning_rate=None,
+        weight_decay=None, momentum=None, beta=None, gamma=None, strat=None):
+
+    dataloader_train, dataloader_val, class_sample_count = data_loader_mars(
+        batch_size,
+        strat)
     num_classes = len(class_sample_count)
 
     model = Network()
@@ -347,7 +377,10 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None, mom
         criterion = torch.nn.CrossEntropyLoss()
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay)
 
     best_f1 = 0.0
     best_prec = 0.0
@@ -375,13 +408,16 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None, mom
     for epoch in range(epochs):
 
         # train loop
-        train_loss, train_acc, train_cm, train_f1, train_prec  = train(epoch, dataloader_train, model, optimizer, criterion, num_classes)
+        train_loss, train_acc, train_cm, train_f1, train_prec = train(
+            epoch, dataloader_train, model, optimizer, criterion, num_classes)
 
         # validation loop
-        val_loss, val_acc, val_cm, val_f1, val_prec = validate(epoch, dataloader_val, model, criterion, num_classes)
+        val_loss, val_acc, val_cm, val_f1, val_prec = validate(
+            epoch, dataloader_val, model, criterion, num_classes)
 
         # Random performance
-        random_acc, random_f1, random_prec = random_perf(dataloader_val, num_classes)
+        random_acc, random_f1, random_prec = random_perf(
+            dataloader_val, num_classes)
 
         train_cls_acc = train_cm.diag().detach().numpy().tolist()
         val_cls_acc = val_cm.diag().detach().numpy().tolist()
@@ -408,7 +444,6 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None, mom
             best_cm = val_cm
             best_model = copy.deepcopy(model)
 
-
     print('Best F1: {:.4f}'.format(best_f1))
     print('Best Prec: {:.4f}'.format(best_prec))
     per_cls_acc = best_cm.diag().detach().numpy().tolist()
@@ -420,11 +455,29 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None, mom
 
     run_time = time.time() - start_time
 
-    torch.save(best_model.state_dict(), './checkpoints/' + strat + '_model.pth')
-    perf_data = [train_losses, train_accs, train_cls_accs, train_f1s, train_precs, val_losses, val_accs, val_cls_accs, val_f1s, val_precs, random_accs, random_f1s, random_precs]
+    torch.save(
+        best_model.state_dict(),
+        './checkpoints/' +
+        strat +
+        '_model.pth')
+    perf_data = [
+        train_losses,
+        train_accs,
+        train_cls_accs,
+        train_f1s,
+        train_precs,
+        val_losses,
+        val_accs,
+        val_cls_accs,
+        val_f1s,
+        val_precs,
+        random_accs,
+        random_f1s,
+        random_precs]
     plot_perf(perf_data, strat)
 
     return val_f1s, val_precs, run_time
+
 
 def train(epoch, data_loader, model, optimizer, criterion, num_classes):
 
@@ -454,10 +507,11 @@ def train(epoch, data_loader, model, optimizer, criterion, num_classes):
         value, preds = out.max(dim=-1)
         batch_acc = sklearn.metrics.accuracy_score(target, preds)
         f1 = sklearn.metrics.f1_score(target, preds, average='macro')
-        prec = sklearn.metrics.precision_score(target, preds, average='macro', zero_division=0)
+        prec = sklearn.metrics.precision_score(
+            target, preds, average='macro', zero_division=0)
 
         for t, p in zip(target.view(-1), preds.view(-1)):
-          cm[t.long(), p.long()] += 1
+            cm[t.long(), p.long()] += 1
 
         losses.update(loss, out.shape[0])
         acc.update(batch_acc, out.shape[0])
@@ -466,86 +520,97 @@ def train(epoch, data_loader, model, optimizer, criterion, num_classes):
         iter_time.update(time.time() - start)
 
         if idx % 100 == 0:
-          print(('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {iter_time.val:.3f} ({iter_time.mean:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.mean:.4f})\t'
-                  'Accuracy {accu.val:.4f} ({accu.mean:.4f})\t')
-                .format(epoch, idx, len(data_loader), iter_time=iter_time, loss=losses, accu=acc))
+            print((
+                'Epoch: [{0}][{1}/{2}]\t'
+                'Time {iter_time.val:.3f} ({iter_time.mean:.3f})\t'
+                'Loss {loss.val:.4f} ({loss.mean:.4f})\t'
+                'Accuracy {accu.val:.4f} ({accu.mean:.4f})\t').format(
+                epoch, idx, len(data_loader),
+                iter_time=iter_time, loss=losses, accu=acc))
 
     cm = cm / cm.sum(1)
 
     return losses.mean.detach().numpy(), acc.mean, cm, f1s.mean, precs.mean
 
+
 def validate(epoch, val_loader, model, criterion, num_classes):
 
-  iter_time = MeanMeter()
-  losses = MeanMeter()
-  acc = MeanMeter()
-  f1s = MeanMeter()
-  precs = MeanMeter()
+    iter_time = MeanMeter()
+    losses = MeanMeter()
+    acc = MeanMeter()
+    f1s = MeanMeter()
+    precs = MeanMeter()
 
-  cm = torch.zeros(num_classes, num_classes)
+    cm = torch.zeros(num_classes, num_classes)
 
-  for idx, (data, target) in enumerate(val_loader):
-    start = time.time()
+    for idx, (data, target) in enumerate(val_loader):
+        start = time.time()
 
-    if torch.cuda.is_available():
-      data = data.cuda()
-      target = target.cuda()
+        if torch.cuda.is_available():
+            data = data.cuda()
+            target = target.cuda()
 
-    model.eval()
-    with torch.no_grad():
-      out = model(data)
-      loss = criterion(out, target)
+        model.eval()
+        with torch.no_grad():
+            out = model(data)
+            loss = criterion(out, target)
 
-    value, preds = out.max(dim=-1)
-    batch_acc = sklearn.metrics.accuracy_score(target, preds)
-    f1 = sklearn.metrics.f1_score(target, preds, average='macro')
-    prec = sklearn.metrics.precision_score(target, preds, average='macro', zero_division=0)
+        value, preds = out.max(dim=-1)
+        batch_acc = sklearn.metrics.accuracy_score(target, preds)
+        f1 = sklearn.metrics.f1_score(target, preds, average='macro')
+        prec = sklearn.metrics.precision_score(
+            target, preds, average='macro', zero_division=0)
 
-    for t, p in zip(target.view(-1), preds.view(-1)):
-      cm[t.long(), p.long()] += 1
+        for t, p in zip(target.view(-1), preds.view(-1)):
+            cm[t.long(), p.long()] += 1
 
-    losses.update(loss, out.shape[0])
-    acc.update(batch_acc, out.shape[0])
-    f1s.update(f1, out.shape[0])
-    precs.update(prec, out.shape[0])
-    iter_time.update(time.time() - start)
+        losses.update(loss, out.shape[0])
+        acc.update(batch_acc, out.shape[0])
+        f1s.update(f1, out.shape[0])
+        precs.update(prec, out.shape[0])
+        iter_time.update(time.time() - start)
 
-  cm = cm / cm.sum(1)
-  per_cls_acc = cm.diag().detach().numpy().tolist()
+    cm = cm / cm.sum(1)
+    per_cls_acc = cm.diag().detach().numpy().tolist()
 
-  print("")
-  print("Validation Metrics:")
+    print("")
+    print("Validation Metrics:")
 
-  for i, acc_i in enumerate(per_cls_acc):
-    print("Accuracy mean of class {}: {:.4f}".format(i, acc_i))
+    for i, acc_i in enumerate(per_cls_acc):
+        print("Accuracy mean of class {}: {:.4f}".format(i, acc_i))
 
-  print(("Accuracy mean total: {accuracy.mean:.4f}").format(accuracy=acc))
-  print(("Loss mean: {loss.mean:.4f}").format(loss=losses))
-  print(("F1 mean: {F1.mean:.4f}").format(F1=f1s))
-  print(("Prec mean: {PREC.mean:.4f}").format(PREC=precs))
-  print("")
+    print(("Accuracy mean total: {accuracy.mean:.4f}").format(accuracy=acc))
+    print(("Loss mean: {loss.mean:.4f}").format(loss=losses))
+    print(("F1 mean: {F1.mean:.4f}").format(F1=f1s))
+    print(("Prec mean: {PREC.mean:.4f}").format(PREC=precs))
+    print("")
 
-  return losses.mean.detach().numpy(), acc.mean, cm, f1s.mean, precs.mean
+    return losses.mean.detach().numpy(), acc.mean, cm, f1s.mean, precs.mean
+
 
 def main():
 
-    cbfl_f1s, cbfl_precs, cbfl_run_time = run(batch_size = 64, epochs=10, learning_rate = 0.00001, weight_decay=0.001, momentum=0.9, beta=0.9999, gamma=1.0, strat='cbfl')
-    ws_f1s, ws_precs, ws_run_time = run(batch_size = 64, epochs=10, learning_rate = 0.00001, weight_decay=0.001, momentum=0.9, beta=0.9999, gamma=1.0, strat='weighted_samp')
-    none_f1s, none_precs, none_run_time = run(batch_size = 64, epochs=10, learning_rate = 0.00001, weight_decay=0.001, momentum=0.9, beta=0.9999, gamma=1.0, strat='none')
+    cbfl_f1s, cbfl_precs, cbfl_run_time = run(
+        batch_size=64, epochs=10, learning_rate=0.00001, weight_decay=0.001,
+        momentum=0.9, beta=0.9999, gamma=1.0, strat='cbfl')
+    ws_f1s, ws_precs, ws_run_time = run(
+        batch_size=64, epochs=10, learning_rate=0.00001, weight_decay=0.001,
+        momentum=0.9, beta=0.9999, gamma=1.0, strat='weighted_samp')
+    none_f1s, none_precs, none_run_time = run(
+        batch_size=64, epochs=10, learning_rate=0.00001, weight_decay=0.001,
+        momentum=0.9, beta=0.9999, gamma=1.0, strat='none')
 
-
-    dataloader_train, dataloader_val, class_sample_count = data_loader_mars(64, 'none')
+    dataloader_train, dataloader_val, class_sample_count = data_loader_mars(
+        64, 'none')
     num_classes = len(class_sample_count)
 
     random_accs = []
     random_f1s = []
     random_precs = []
 
-
-    for  epoch in range(10):
-        random_acc, random_f1, random_prec = random_perf(dataloader_val, num_classes)
+    for epoch in range(10):
+        random_acc, random_f1, random_prec = random_perf(
+            dataloader_val, num_classes)
         random_accs.append(random_acc)
         random_f1s.append(random_f1)
         random_precs.append(random_prec)
@@ -556,8 +621,20 @@ def main():
     print('none_run_time: ' + str(none_run_time))
     print('')
 
-    perf_data = [cbfl_f1s, cbfl_precs, cbfl_run_time, ws_f1s, ws_precs, ws_run_time, none_f1s, none_precs, none_run_time, random_f1s, random_precs]
+    perf_data = [
+        cbfl_f1s,
+        cbfl_precs,
+        cbfl_run_time,
+        ws_f1s,
+        ws_precs,
+        ws_run_time,
+        none_f1s,
+        none_precs,
+        none_run_time,
+        random_f1s,
+        random_precs]
     plot_perf_comp(perf_data)
+
 
 if __name__ == '__main__':
     main()

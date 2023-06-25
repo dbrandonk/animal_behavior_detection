@@ -122,8 +122,8 @@ def data_aug_mars():
 
 def data_load_mars_seq(batch_size):
 
-    data = np.load('data/aicrowd1/train_seq_data.npy',allow_pickle=True)
-    target = np.load('data/aicrowd1/train_seq_target.npy',allow_pickle=True)
+    data = np.load('data/train_seq_data.npy',allow_pickle=True)
+    target = np.load('data/train_seq_target.npy',allow_pickle=True)
 
     shuf = np.random.permutation(data.shape[0])
     data = data[shuf]
@@ -469,7 +469,7 @@ def validate(epoch, val_loader, model, criterion, num_classes):
 
 def main():
 
-    transformer_f1s, transformer_precs, transformer_run_time = run(batch_size = 64, epochs=10, learning_rate = 0.001, weight_decay=0.001, momentum=0.9, beta=0.9999, gamma=1.0, strat=None, save_path='/content/drive/MyDrive/SCHOOL/CS7643/CS7643-PROJECT-SHARED/')
+    transformer_f1s, transformer_precs, transformer_run_time = run(batch_size = 64, epochs=10, learning_rate = 0.001, weight_decay=0.001, momentum=0.9, beta=0.9999, gamma=1.0, strat=None, save_path='.')
 
     print('')
     print('transformer_run_time: ' + str(transformer_run_time))

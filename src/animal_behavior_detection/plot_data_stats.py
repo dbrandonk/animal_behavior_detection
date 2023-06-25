@@ -4,7 +4,7 @@ import numpy as np
 
 def data_sample_count_mars():
 
-    train_data = np.load('data/aicrowd1/train.npy',allow_pickle=True).item()
+    train_data = np.load('data/train.npy',allow_pickle=True).item()
 
     data = None
     target = None
@@ -32,13 +32,13 @@ def data_sample_count_mars():
 
 def num_to_text(anno_list):
 
-    train = np.load('data/aicrowd1/train.npy',allow_pickle=True).item()
+    train = np.load('data/train.npy',allow_pickle=True).item()
     number_to_class = {i: s for i, s in enumerate(train['vocabulary'])}
     return np.vectorize(number_to_class.get)(anno_list)
 
 def plot_annotation_strip(annotation_sequence, start_frame = 0, stop_frame = 100, title="Behavior Labels"):
 
-  train = np.load('data/aicrowd1/train.npy',allow_pickle=True).item()
+  train = np.load('data/train.npy',allow_pickle=True).item()
   class_to_color = {'other': 'white', 'attack' : 'red', 'mount' : 'green', 'investigation': 'orange'}
   class_to_number = {s: i for i, s in enumerate(train['vocabulary'])}
   number_to_class = {i: s for i, s in enumerate(train['vocabulary'])}
@@ -81,7 +81,7 @@ def plot_annotation_strip(annotation_sequence, start_frame = 0, stop_frame = 100
 
 def plot_video():
 
-    train = np.load('data/aicrowd1/train.npy',allow_pickle=True).item()
+    train = np.load('data/train.npy',allow_pickle=True).item()
 
     for k, seq in train['sequences'].items():
         kp = seq['keypoints']

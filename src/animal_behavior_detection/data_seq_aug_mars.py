@@ -1,30 +1,39 @@
+"""
+Data Augmentation for Mars Dataset
+"""
 import numpy as np
+
+SEQ_LEN = 90
 
 
 def data_aug_mars():
+    """
+    Perform data augmentation for the Mars dataset.
+
+    This function loads the training data from the 'train.npy' file and performs data augmentation
+    by sliding a window over the sequences and reshaping them. The augmented data is saved as
+    'train_seq_data.npy', and the corresponding annotations are saved as 'train_seq_target.npy'.
+    """
 
     train_data = np.load('data/train.npy', allow_pickle=True).item()
-
-    SEQ_LEN = 90
 
     data = None
     target = None
 
-    for k, seq in train_data['sequences'].items():
+    for _, seq in train_data['sequences'].items():
 
-        kp = seq['keypoints']
+        key_point = seq['keypoints']
         annot = seq['annotations']
 
         padding = np.zeros(
             ((SEQ_LEN - 1),
-             kp.shape[1],
-             kp.shape[2],
-             kp.shape[3]))
-        seq_list = np.vstack((padding, kp))
+             key_point.shape[1],
+             key_point.shape[2],
+             key_point.shape[3]))
+        seq_list = np.vstack((padding, key_point))
 
         seq_list = np.lib.stride_tricks.sliding_window_view(
             seq_list, SEQ_LEN, axis=0)
-        # seq_list = np.moveaxis(seq_list, [4,0,1,2,3], [0,1,2,3,4])
         seq_list = np.moveaxis(seq_list, [4, 1, 2, 3], [1, 2, 3, 4])
         seq_list = seq_list.reshape(
             seq_list.shape[0],

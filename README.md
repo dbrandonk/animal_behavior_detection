@@ -27,7 +27,28 @@ From the root of the project run the following command:
 
 python3 src/animal_behavior_detection/data_seq_aug_mars.py
 
-This command restructures the data to make useful.
+This command restructures the data to make it more useful.
+
+## Entry points
+
+From the root of the project run the following commands:
+
+- python3 src/animal_behavior_detection/class_imbalance.py
+
+This module implements experiments that tackle the issue of class imbalance in the dataset. 
+The experiments test the weighted sampling, focal loss, and class imbalance focal loss methods. 
+Running this module will produce models and various performance plots for each of the methods. 
+
+- python3 src/animal_behavior_detection/plot_data_stats.py
+
+This module produces figures that visualization class imbalance problem of data set.
+
+- python3 src/animal_behavior_detection/transformer.py
+
+This module trains a transformer on the MARS dataset.
+The training dataset has been augmented to ensure equal weighting across all classes.
+The dataset has also been sequenced (more explanation required here), allowing us to take advantage of the temporal nature of the data.
+Running this module will produce a model and various performance plots of the model. 
 
 ## TODO
 

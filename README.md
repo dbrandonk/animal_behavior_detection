@@ -1,7 +1,7 @@
 ## Project Brief
 https://www.aicrowd.com/challenges/multi-agent-behavior-representation-modeling-measurement-and-applications
 
-As a disclaimer, to be put nicely, the organization and workflow of the existing codebase of this project has a lot of room for improvement. 
+As a disclaimer, to be put nicely, the organization and workflow of this project has a lot of room for improvement. 
 
 ## Installation
 To install all the necessary dependencies, please run the following command at the root of the project:

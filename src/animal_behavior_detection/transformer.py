@@ -1,29 +1,79 @@
+"""
+This module provides utility functions and classes for training and
+evaluating a Transformer-based neural network model.
+
+Classes:
+    - MeanMeter: Utility class for computing and tracking the mean value.
+    - PositionalEncoding: Module for injecting positional encodings into input sequences.
+    - Transformer: Transformer model implementation.
+
+Functions:
+    - data_aug_mars: Perform data augmentation for the Mars dataset.
+    - data_load_mars_seq: Load Mars sequential data and create data loaders.
+    - plot_perf:
+        Plot performance metrics (loss, accuracy, F1 score, precision).
+    - random_perf:
+        Calculate performance metrics (accuracy, F1 score, precision) of random prediction baseline.
+    - run: Execute the complete training and evaluation pipeline.
+
+Constants:
+    - SEQ_LEN: The length of the input sequences.
+
+
+Note:
+    This module assumes the existence of certain data files in specific paths
+    ('data/aicrowd1/train.npy' and 'data/train_seq_data.npy').
+    Make sure to have these files available or modify the code accordingly.
+"""
+
 import copy
 import math
+import time
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics
-import time
 import torch
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import TensorDataset, DataLoader
 
+SEQ_LEN = 90
 
-class MeanMeter(object):
+
+class MeanMeter():
+    """
+    Utility class for computing and tracking the mean value.
+    This class provides functionality to compute and track the mean value of a series of values.
+    """
 
     def __init__(self):
-        self.reset()
-
-    def reset(self):
+        """
+        Initializes a new instance of the MeanMeter class.
+        """
         self.val = 0
         self.mean = 0
         self.sum = 0
         self.count = 0
 
-    def update(self, val, n=1):
+    def reset(self):
+        """
+        Resets the meter.
+        """
+        self.val = 0
+        self.mean = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, input_count=1):
+        """
+        Updates the meter with a new value.
+
+        Args:
+            val (float): The new value.
+            input_count (int): The count of the new value. Default is 1.
+        """
         self.val = val
-        self.sum += val * n
-        self.count += n
+        self.sum += val * input_count
+        self.count += input_count
         self.mean = self.sum / self.count
 
 
@@ -39,29 +89,56 @@ class PositionalEncoding(torch.nn.Module):
 
     def __init__(self, d_model: int, dropout: float = 0.1,
                  max_len: int = 1000):
+        """
+        Initialize the PositionalEncoding module and its parameters.
+
+        Args:
+            d_model (int): The dimensionality of the input features and positional encodings.
+            dropout (float, optional): The dropout rate to apply during training. Defaults to 0.1.
+            max_len (int, optional): The maximum length of the input sequences. Defaults to 1000.
+        """
         super().__init__()
         self.dropout = torch.nn.Dropout(p=dropout)
 
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) *
+        position = torch.arange(max_len).unsqueeze(1)  # pylint: disable=no-member
+        div_term = torch.exp(torch.arange(0, d_model, 2) *  # pylint: disable=no-member
                              (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        positional_encoding = torch.zeros(max_len, 1, d_model)  # pylint: disable=no-member
+        positional_encoding[:, 0, 0::2] = torch.sin(  # pylint: disable=no-member
+            position * div_term)
+        positional_encoding[:, 0, 1::2] = torch.cos(  # pylint: disable=no-member
+            position * div_term)
+        self.register_buffer('positional_encoding', positional_encoding)
 
-    def forward(self, x):
+    def forward(self, input_):
         """
+        Perform a forward pass of the PositionalEncoding module.
+
         Args:
-            x: Tensor, shape [seq_len, batch_size, feature]
+            input_ (torch.Tensor): The input tensor of shape [seq_len, batch_size, feature].
+
+        Returns:
+            torch.Tensor: The output tensor after adding positional encodings and applying dropout.
+
         """
-        x = x + self.pe[:x.size(0)]
-        return self.dropout(x)
+        input_ = input_ + self.pe[:input_.size(0)]
+        return self.dropout(input_)
 
 
 class Transformer(torch.nn.Module):
+    """
+    Transformer Model
+
+    This class defines a transformer-based neural network model.
+
+    Methods:
+        init_weights(): Initialize the weights of the fully connected layers.
+        forward(input_): Perform a forward pass of the Transformer model.
+
+    """
 
     def __init__(self):
+        """Initialize the Transformer model."""
         super().__init__()
 
         d_model = 28
@@ -77,43 +154,65 @@ class Transformer(torch.nn.Module):
         self.init_weights()
 
     def init_weights(self) -> None:
+        """Initialize Model Weights."""
         initrange = 0.1
         self.fc1.bias.data.zero_()
         self.fc1.weight.data.uniform_(-initrange, initrange)
         self.fc2.bias.data.zero_()
         self.fc2.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, x):
+    def forward(self, input_):
+        """
+        Forward Pass
 
-        out = self.pos_encoder(x)
+        forward pass of the model.
+        It takes an input tensor and applies the positional encoding layer,
+        the transformer encoder, and the fully connected layers to produce the output.
+
+        Args:
+            input_ (torch.Tensor): The input tensor to the model.
+
+        Returns:
+            torch.Tensor: The output tensor produced by the model.
+
+        """
+
+        out = self.pos_encoder(input_)
         out = self.transformer_encoder(out)
         out = out.permute((1, 0, 2))
-        out = torch.flatten(out, 1)
+        out = torch.flatten(out, 1)  # pylint: disable=no-member
         out = torch.nn.functional.relu(self.fc1(out))
         out = self.fc2(out)
         return out
 
 
 def data_aug_mars():
+    """
+    Perform Data Augmentation for Mars Dataset
+
+    This function performs data augmentation for the Mars dataset.
+    It takes the original data, applies padding and sliding window
+    technique to generate sequential data, and saves the augmented
+    data and corresponding targets to files.
+
+    """
 
     train_data = np.load('data/aicrowd1/train.npy', allow_pickle=True).item()
-
-    SEQ_LEN = 90
 
     data = None
     target = None
 
-    for k, seq in train_data['sequences'].items():
+    for _, seq in train_data['sequences'].items():
 
-        kp = seq['keypoints']
+        key_point = seq['keypoints']
         annot = seq['annotations']
 
         padding = np.zeros(
             ((SEQ_LEN - 1),
-             kp.shape[1],
-             kp.shape[2],
-             kp.shape[3]))
-        seq_list = np.vstack((padding, kp))
+             key_point.shape[1],
+             key_point.shape[2],
+             key_point.shape[3]))
+        seq_list = np.vstack((padding, key_point))
 
         seq_list = np.lib.stride_tricks.sliding_window_view(
             seq_list, SEQ_LEN, axis=0)
@@ -138,7 +237,21 @@ def data_aug_mars():
     np.save('data/aicrowd1/train_seq_target.npy', target)
 
 
-def data_load_mars_seq(batch_size):
+def data_load_mars_seq(batch_size):  # pylint: disable = too-many-locals
+    """
+    Load Mars Sequential Data
+    This function loads the Mars sequential data for training and validation.
+    It performs data splitting, class sample count calculation, and creates
+    data loaders for training and validation sets.
+
+    Args:
+        batch_size (int): The batch size for the data loaders.
+
+    Returns:
+        tuple: A tuple containing the training data loader, validation data
+        loader, and class sample count.
+
+    """
 
     data = np.load('data/train_seq_data.npy', allow_pickle=True)
     target = np.load('data/train_seq_target.npy', allow_pickle=True)
@@ -147,8 +260,10 @@ def data_load_mars_seq(batch_size):
     data = data[shuf]
     target = target[shuf]
 
-    data_train, data_val = np.split(data, [int(0.8 * data.shape[0])])
-    target_train, target_val = np.split(target, [int(0.8 * target.shape[0])])
+    data_train, data_val = np.split(  # pylint: disable= unbalanced-tuple-unpacking
+        data, [int(0.8 * data.shape[0])])
+    target_train, target_val = np.split(  # pylint: disable= unbalanced-tuple-unpacking
+        target, [int(0.8 * target.shape[0])])
 
     class_sample_count = []
 
@@ -165,11 +280,11 @@ def data_load_mars_seq(batch_size):
 
     data_train = torch.Tensor(data_train)
     target_train = torch.Tensor(target_train)
-    target_train = target_train.type(torch.long)
+    target_train = target_train.type(torch.long)  # pylint: disable= no-member
 
     data_val = torch.Tensor(data_val)
     target_val = torch.Tensor(target_val)
-    target_val = target_val.type(torch.long)
+    target_val = target_val.type(torch.long)  # pylint: disable= no-member
 
     dataset_train = TensorDataset(data_train, target_train)
     dataloader_train = DataLoader(
@@ -186,10 +301,21 @@ def data_load_mars_seq(batch_size):
     return dataloader_train, dataloader_val, class_sample_count
 
 
-def plot_perf(perf_data, strat, save_path='.'):
+def plot_perf(perf_data, strat, save_path='.'):  # pylint: disable= too-many-statements, too-many-locals
+    """
+    Plot performance metrics (loss, accuracy, F1 score, precision) for a specific model strategy.
+
+    Args:
+        perf_data (List): List containing the performance data for the model.
+        strat (str): Model strategy ('cbfl', 'weighted_samp', 'none').
+        save_path (str): local path location to save plots.
+
+    Returns:
+        None
+    """
 
     perf_data = np.array(perf_data)
-    train_losses, train_accs, train_cls_accs, train_f1s, train_precs, val_losses, val_accs, val_cls_accs, val_f1s, val_precs, random_accs, random_f1s, random_precs = perf_data
+    train_losses, train_accs, train_cls_accs, train_f1s, train_precs, val_losses, val_accs, val_cls_accs, val_f1s, val_precs, random_accs, random_f1s, random_precs = perf_data  # pylint: disable=line-too-long
     title = 'TRANSFORMER'
 
     plt.plot(train_losses)
@@ -272,29 +398,59 @@ def plot_perf(perf_data, strat, save_path='.'):
 
 
 def random_perf(val_loader, num_classes):
+    """
+    Calculate performance metrics (accuracy, F1 score, precision) of a random prediction baseline
+    for the given validation dataset.
+
+    Args:
+        val_loader (torch.utils.data.DataLoader): Validation data loader.
+        num_classes (int): Number of classes in the classification task.
+
+    Returns:
+        Tuple[float, float, float]: A tuple containing the following:
+            - accs.mean (float): Mean accuracy of random predictions.
+            - f1s.mean (float): Mean F1 score of random predictions.
+            - precs.mean (float): Mean precision of random predictions.
+    """
 
     accs = MeanMeter()
     f1s = MeanMeter()
     precs = MeanMeter()
 
-    for idx, (data, target) in enumerate(val_loader):
+    for _, (_, target) in enumerate(val_loader):
 
         preds = np.random.randint(0, num_classes, target.shape[0])
 
         acc = sklearn.metrics.accuracy_score(target, preds)
-        f1 = sklearn.metrics.f1_score(target, preds, average='macro')
+        f1_score = sklearn.metrics.f1_score(target, preds, average='macro')
         prec = sklearn.metrics.precision_score(
             target, preds, average='macro', zero_division=0)
 
         accs.update(acc, preds.shape[0])
-        f1s.update(f1, preds.shape[0])
+        f1s.update(f1_score, preds.shape[0])
         precs.update(prec, preds.shape[0])
 
     return accs.mean, f1s.mean, precs.mean
 
 
-def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None,
-        momentum=None, beta=None, gamma=None, strat=None, save_path='.'):
+def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None,  # pylint: disable= too-many-arguments, too-many-statements, too-many-locals
+        save_path='.'):
+    """
+    Execute the complete training and evaluation pipeline.
+
+    Args:
+        batch_size (int): Batch size for training and validation.
+        epochs (int): Number of training epochs.
+        learning_rate (float): Learning rate for optimization.
+        weight_decay (float): Weight decay for optimization.
+        save_path (str): Local path where trained model is saved.
+
+    Returns:
+        Tuple[List[float], List[float], float]: A tuple containing the following:
+            - val_f1s (List[float]): List of F1 scores for each validation epoch.
+            - val_precs (List[float]): List of precision scores for each validation epoch.
+            - run_time (float): Total execution time in seconds.
+    """
 
     dataloader_train, dataloader_val, class_sample_count = data_load_mars_seq(
         batch_size)
@@ -342,7 +498,7 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None,
 
         # validation loop
         val_loss, val_acc, val_cm, val_f1, val_prec = validate(
-            epoch, dataloader_val, model, criterion, num_classes)
+            dataloader_val, model, criterion, num_classes)
 
         # Random performance
         random_acc, random_f1, random_prec = random_perf(
@@ -373,12 +529,12 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None,
             best_cm = val_cm
             best_model = copy.deepcopy(model)
 
-    print('Best F1: {:.4f}'.format(best_f1))
-    print('Best Prec: {:.4f}'.format(best_prec))
+    print(f'Best F1: {best_f1:.4f}')
+    print(f'Best Prec: {best_prec:.4f}')
     per_cls_acc = best_cm.diag().detach().numpy().tolist()
 
     for i, acc_i in enumerate(per_cls_acc):
-        print("Best accuracy of class {}: {:.4f}".format(i, acc_i))
+        print(f"Best accuracy of class {i}: {acc_i:.4f}")
 
     print('')
 
@@ -407,15 +563,33 @@ def run(batch_size=None, epochs=None, learning_rate=None, weight_decay=None,
     return val_f1s, val_precs, run_time
 
 
-def train(epoch, data_loader, model, optimizer, criterion, num_classes):
+def train(epoch, data_loader, model, optimizer, criterion, num_classes):  # pylint: disable = too-many-arguments, too-many-locals
+    """
+    Train the model for one epoch using the provided data loader, optimizer, and criterion.
 
+    Args:
+        epoch (int): Current epoch number.
+        data_loader (torch.utils.data.DataLoader): Data loader for training data.
+        model (torch.nn.Module): Model to be trained.
+        optimizer: Optimizer used for training.
+        criterion: Loss function used for training.
+        num_classes (int): Number of classes in the classification task.
+
+    Returns:
+        Tuple[float, float, torch.Tensor, float, float]: A tuple containing the following:
+            - losses.mean (float): Mean loss over the training set.
+            - acc.mean (float): Mean accuracy over the training set.
+            - correlation_matrix (torch.Tensor): Correlation matrix of predicted classes.
+            - f1s.mean (float): Mean F1 score over the training set.
+            - precs.mean (float): Mean precision over the training set.
+    """
     iter_time = MeanMeter()
     losses = MeanMeter()
     acc = MeanMeter()
     f1s = MeanMeter()
     precs = MeanMeter()
 
-    cm = torch.zeros(num_classes, num_classes)
+    confusion_matrix = torch.zeros(num_classes, num_classes)  # pylint: disable= no-member
 
     for idx, (data, target) in enumerate(data_loader):
 
@@ -435,11 +609,11 @@ def train(epoch, data_loader, model, optimizer, criterion, num_classes):
         optimizer.step()
 
         # Calc accuracy
-        value, preds = out.max(dim=-1)
+        _, preds = out.max(dim=-1)
 
         batch_acc = sklearn.metrics.accuracy_score(
             target.cpu().numpy(), preds.cpu().numpy())
-        f1 = sklearn.metrics.f1_score(
+        f1_score = sklearn.metrics.f1_score(
             target.cpu().numpy(),
             preds.cpu().numpy(),
             average='macro')
@@ -449,31 +623,48 @@ def train(epoch, data_loader, model, optimizer, criterion, num_classes):
             average='macro', zero_division=0)
 
         # update confusion matrix
-        for t, p in zip(target.view(-1), preds.view(-1)):
-            cm[t.long(), p.long()] += 1
+        for target_view, pred_view in zip(target.view(-1), preds.view(-1)):
+            confusion_matrix[target_view.long(), pred_view.long()] += 1
 
         # Calc means
         losses.update(loss, out.shape[0])
         acc.update(batch_acc, out.shape[0])
-        f1s.update(f1, out.shape[0])
+        f1s.update(f1_score, out.shape[0])
         precs.update(prec, out.shape[0])
         iter_time.update(time.time() - start)
 
         if idx % 100 == 0:
             print((
-                'Epoch: [{0}][{1}/{2}]\t'
+                'Epoch: [{0}][{1}/{2}]\t'  # pylint: disable= consider-using-f-string
                 'Time {iter_time.val:.3f} ({iter_time.mean:.3f})\t'
                 'Loss {loss.val:.4f} ({loss.mean:.4f})\t'
                 'Accuracy {accu.val:.4f} ({accu.mean:.4f})\t').format(
                 epoch, idx, len(data_loader),
                 iter_time=iter_time, loss=losses, accu=acc))
 
-    cm = cm / cm.sum(1)
+    confusion_matrix = confusion_matrix / confusion_matrix.sum(1)
 
-    return losses.mean.detach().cpu().numpy(), acc.mean, cm, f1s.mean, precs.mean
+    return losses.mean.detach().cpu().numpy(), acc.mean, confusion_matrix, f1s.mean, precs.mean
 
 
-def validate(epoch, val_loader, model, criterion, num_classes):
+def validate(val_loader, model, criterion, num_classes):  # pylint: disable = too-many-locals
+    """
+    Perform validation on the given model using the provided validation data loader.
+
+    Args:
+        val_loader (torch.utils.data.DataLoader): Validation data loader.
+        model (torch.nn.Module): Model to be evaluated.
+        criterion: Loss function used for evaluation.
+        num_classes (int): Number of classes in the classification task.
+
+    Returns:
+        Tuple[float, float, torch.Tensor, float, float]: A tuple containing the following:
+            - losses.mean (float): Mean loss over the validation set.
+            - acc.mean (float): Mean accuracy over the validation set.
+            - correlation_matrix (torch.Tensor): Correlation matrix of predicted classes.
+            - f1s.mean (float): Mean F1 score over the validation set.
+            - precs.mean (float): Mean precision over the validation set.
+    """
 
     iter_time = MeanMeter()
     losses = MeanMeter()
@@ -481,10 +672,10 @@ def validate(epoch, val_loader, model, criterion, num_classes):
     f1s = MeanMeter()
     precs = MeanMeter()
 
-    cm = torch.zeros(num_classes, num_classes)
+    confusion_matrix = torch.zeros(num_classes, num_classes)  # pylint: disable=no-member
 
     # evaluation loop
-    for idx, (data, target) in enumerate(val_loader):
+    for _, (data, target) in enumerate(val_loader):
         start = time.time()
 
         data = data.permute((1, 0, 2))
@@ -498,10 +689,10 @@ def validate(epoch, val_loader, model, criterion, num_classes):
             out = model(data)
             loss = criterion(out, target)
 
-        value, preds = out.max(dim=-1)
+        _, preds = out.max(dim=-1)
         batch_acc = sklearn.metrics.accuracy_score(
             target.cpu().numpy(), preds.cpu().numpy())
-        f1 = sklearn.metrics.f1_score(
+        f1_score = sklearn.metrics.f1_score(
             target.cpu().numpy(),
             preds.cpu().numpy(),
             average='macro')
@@ -511,38 +702,38 @@ def validate(epoch, val_loader, model, criterion, num_classes):
             average='macro', zero_division=0)
 
         # update confusion matrix
-        for t, p in zip(target.view(-1), preds.view(-1)):
-            cm[t.long(), p.long()] += 1
+        for target_view, pred_view in zip(target.view(-1), preds.view(-1)):
+            confusion_matrix[target_view.long(), pred_view.long()] += 1
 
         losses.update(loss, out.shape[0])
         acc.update(batch_acc, out.shape[0])
-        f1s.update(f1, out.shape[0])
+        f1s.update(f1_score, out.shape[0])
         precs.update(prec, out.shape[0])
         iter_time.update(time.time() - start)
 
-    cm = cm / cm.sum(1)
-    per_cls_acc = cm.diag().detach().numpy().tolist()
+    confusion_matrix = confusion_matrix / confusion_matrix.sum(1)
+    per_cls_acc = confusion_matrix.diag().detach().numpy().tolist()
 
     print("")
     print("Validation Metrics:")
 
     for i, acc_i in enumerate(per_cls_acc):
-        print("Accuracy mean of class {}: {:.4f}".format(i, acc_i))
+        print(f"Accuracy mean of class {i}: {acc_i:.4f}")
 
-    print(("Accuracy mean total: {accuracy.mean:.4f}").format(accuracy=acc))
-    print(("Loss mean: {loss.mean:.4f}").format(loss=losses))
-    print(("F1 mean: {F1.mean:.4f}").format(F1=f1s))
-    print(("Prec mean: {PREC.mean:.4f}").format(PREC=precs))
+    print(f"Accuracy mean total: {acc.mean:.4f}")
+    print(f"Loss mean: {losses.mean:.4f}")
+    print(f"F1 mean: {f1s.mean:.4f}")
+    print(f"Prec mean: {precs.mean:.4f}")
     print("")
 
-    return losses.mean.detach().cpu().numpy(), acc.mean, cm, f1s.mean, precs.mean
+    return losses.mean.detach().cpu().numpy(), acc.mean, confusion_matrix, f1s.mean, precs.mean
 
 
 def main():
+    """main."""
 
-    transformer_f1s, transformer_precs, transformer_run_time = run(
-        batch_size=64, epochs=10, learning_rate=0.001, weight_decay=0.001,
-        momentum=0.9, beta=0.9999, gamma=1.0, strat=None, save_path='.')
+    _, _, transformer_run_time = run(
+        batch_size=64, epochs=10, learning_rate=0.001, weight_decay=0.001, save_path='.')
 
     print('')
     print('transformer_run_time: ' + str(transformer_run_time))

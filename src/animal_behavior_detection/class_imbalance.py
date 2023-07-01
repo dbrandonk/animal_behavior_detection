@@ -1,33 +1,67 @@
+"""
+This module implements various experiments to test methods
+for working with a class imbalanced data set.
+"""
+
 import copy
+import time
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-import pandas as pd
 import sklearn.metrics
-import time
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 
 
 class FocalLoss(torch.nn.Module):
+    """
+    Focal Loss implementation for multi-class classification.
+
+    This class defines the Focal Loss, which is a modified version of the Cross Entropy Loss that
+    helps address the problem of class imbalance in multi-class classification tasks. It focuses
+    on hard examples and reduces the loss contribution from easy examples.
+
+    Methods:
+        forward(input_, target):
+            Computes the focal loss given the input predictions and target labels.
+
+    """
 
     def __init__(self, samples_per_cls, no_of_classes, beta, gamma):
-        super(FocalLoss, self).__init__()
+        """
+        Initializes a new instance of the FocalLoss class.
+
+        Args:
+            samples_per_cls (list or numpy array):
+                The number of samples per class in the training dataset.
+            no_of_classes (int): The number of classes.
+            beta (float):
+                hyperparameter for adjusting the weight assigned to each class for loss computation.
+            gamma (float): The hyperparameter for adjusting the degree of focusing on hard examples.
+
+        """
+        super(FocalLoss, self).__init__()  # pylint: disable= super-with-arguments
         self.samples_per_cls = samples_per_cls
         self.no_of_classes = no_of_classes
         self.beta = beta
         self.gamma = gamma
 
-    def forward(self, input, target):
+    def forward(self, input_, target):
         """
-        :param input: input predictions
-        :param target: labels
-        :return: loss
+        Computes the focal loss given the input predictions and target labels.
+
+        Args:
+            input_ (torch.Tensor): The input predictions.
+            target (torch.Tensor): The target labels.
+
+        Returns:
+            torch.Tensor: The computed focal loss.
+
         """
 
         loss = cb_loss(
             target,
-            input,
+            input_,
             self.samples_per_cls,
             self.no_of_classes,
             'focal',
@@ -37,36 +71,71 @@ class FocalLoss(torch.nn.Module):
         return loss
 
 
-class MeanMeter(object):
+class MeanMeter():
+    """
+    Utility class for computing and tracking the mean value.
+    This class provides functionality to compute and track the mean value of a series of values.
+    """
 
     def __init__(self):
-        self.reset()
-
-    def reset(self):
+        """
+        Initializes a new instance of the MeanMeter class.
+        """
         self.val = 0
         self.mean = 0
         self.sum = 0
         self.count = 0
 
-    def update(self, val, n=1):
+    def reset(self):
+        """
+        Resets the meter.
+        """
+        self.val = 0
+        self.mean = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, input_count=1):
+        """
+        Updates the meter with a new value.
+
+        Args:
+            val (float): The new value.
+            input_count (int): The count of the new value. Default is 1.
+        """
         self.val = val
-        self.sum += val * n
-        self.count += n
+        self.sum += val * input_count
+        self.count += input_count
         self.mean = self.sum / self.count
 
 
 class Network(torch.nn.Module):
+    """
+    Neural network model for classification.
+    This class defines a neural network model with four fully connected layers.
+    """
+
     def __init__(self):
-        super(Network, self).__init__()
+        """ Initializes a new instance of the Network class. """
+        super(Network, self).__init__()  # pylint: disable= super-with-arguments
 
         self.fc1 = torch.nn.Linear(28, 512)
         self.fc2 = torch.nn.Linear(512, 512)
         self.fc3 = torch.nn.Linear(512, 512)
         self.fc4 = torch.nn.Linear(512, 4)
 
-    def forward(self, x):
+    def forward(self, input_):
+        """
+        Performs the forward pass of the neural network.
 
-        outs = torch.flatten(x, 1)
+        Args:
+            input_ (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+
+        """
+        outs = torch.flatten(input_, 1)  # pylint: disable=no-member
         outs = torch.nn.functional.relu(self.fc1(outs))
         outs = torch.nn.functional.relu(self.fc2(outs))
         outs = torch.nn.functional.relu(self.fc3(outs))
@@ -75,7 +144,7 @@ class Network(torch.nn.Module):
         return outs
 
 
-def cb_loss(labels, logits, samples_per_cls,
+def cb_loss(labels, logits, samples_per_cls,  # pylint: disable=too-many-arguments
             no_of_classes, loss_type, beta, gamma):
     """
     Compute the Class Balanced Loss between `logits` and the ground truth `labels`.
@@ -90,7 +159,7 @@ def cb_loss(labels, logits, samples_per_cls,
       beta: float. Hyperparameter for Class balanced loss.
       gamma: float. Hyperparameter for Focal loss.
     Returns:
-      cb_loss: A float tensor representing class balanced loss
+      cb_loss_value: A float tensor representing class balanced loss
     """
 
     effective_num = 1.0 - np.power(beta, samples_per_cls)
@@ -99,42 +168,58 @@ def cb_loss(labels, logits, samples_per_cls,
 
     labels_one_hot = torch.nn.functional.one_hot(labels, no_of_classes).float()
 
-    weights = torch.tensor(weights).float()
+    weights = torch.tensor(weights).float()  # pylint: disable=no-member
     weights = weights.unsqueeze(0)
     weights = weights.repeat(labels_one_hot.shape[0], 1) * labels_one_hot
     weights = weights.sum(1)
     weights = weights.unsqueeze(1)
     weights = weights.repeat(1, no_of_classes)
 
-    cb_loss = focal_loss(labels_one_hot, logits, weights, gamma)
+    cb_loss_value = focal_loss(labels_one_hot, logits, weights, gamma)
 
-    return cb_loss
+    return cb_loss_value
 
 
-def data_loader_mars(batch_size, strat):
+def data_loader_mars(batch_size, strat):  # pylint: disable= too-many-locals
+    """
+    Loads and preprocesses the data for training and validation.
+
+    Args:
+        batch_size (int): The batch size for the data loader.
+        strat (str): The data sampling strategy. Options: 'cbfl', 'weighted_samp', or 'none'
+
+    Returns:
+        tuple: contains the data loaders for training and validation, and the class sample count.
+
+    Raises:
+        ValueError: If an unsupported `strat` value is provided.
+
+    """
 
     train_data = np.load('data/train.npy', allow_pickle=True).item()
 
     data = None
     target = None
 
-    for k, seq in train_data['sequences'].items():
-        kp = seq['keypoints']
+    for _, seq in train_data['sequences'].items():
+        key_point = seq['keypoints']
         annot = seq['annotations']
 
         if data is None:
-            data = kp.copy()
+            data = key_point.copy()
             target = annot.copy()
         else:
-            data = np.concatenate((data, kp), axis=0)
+            data = np.concatenate((data, key_point), axis=0)
             target = np.concatenate((target, annot), axis=0)
 
     shuf = np.random.permutation(data.shape[0])
     data = data[shuf]
     target = target[shuf]
 
-    data_train, data_val = np.split(data, [int(0.8 * data.shape[0])])
-    target_train, target_val = np.split(target, [int(0.8 * target.shape[0])])
+    data_train, data_val = np.split(  # pylint: disable= unbalanced-tuple-unpacking
+        data, [int(0.8 * data.shape[0])])
+    target_train, target_val = np.split(  # pylint: disable= unbalanced-tuple-unpacking
+        target, [int(0.8 * target.shape[0])])
 
     class_sample_count = []
 
@@ -152,11 +237,11 @@ def data_loader_mars(batch_size, strat):
 
     data_train = torch.Tensor(data_train)
     target_train = torch.Tensor(target_train)
-    target_train = target_train.type(torch.long)
+    target_train = target_train.type(torch.long)  # pylint: disable=no-member
 
     data_val = torch.Tensor(data_val)
     target_val = torch.Tensor(target_val)
-    target_val = target_val.type(torch.long)
+    target_val = target_val.type(torch.long)  # pylint: disable=no-member
 
     dataset_train = TensorDataset(data_train, target_train)
 
@@ -191,37 +276,47 @@ def focal_loss(labels, logits, alpha, gamma):
         specifying per-example weight for balanced cross entropy.
       gamma: A float scalar modulating loss from hard and easy examples.
     Returns:
-      focal_loss: A float32 scalar representing normalized total loss.
+      focal_loss_value: A float32 scalar representing normalized total loss.
     """
 
-    BCLoss = torch.nn.functional.binary_cross_entropy_with_logits(
+    bc_loss = torch.nn.functional.binary_cross_entropy_with_logits(
         input=logits, target=labels, reduction="none")
 
     if gamma == 0.0:
         modulator = 1.0
     else:
-        modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(
-            1 + torch.exp(-1.0 * logits)))
+        modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(  # pylint: disable=no-member
+            1 + torch.exp(-1.0 * logits)))  # pylint: disable=no-member
 
-    loss = modulator * BCLoss
+    loss = modulator * bc_loss
 
     weighted_loss = alpha * loss
-    focal_loss = torch.sum(weighted_loss)
+    focal_loss_value = torch.sum(weighted_loss)  # pylint: disable=no-member
 
-    focal_loss /= torch.sum(labels)
-    return focal_loss
+    focal_loss_value /= torch.sum(labels)  # pylint: disable=no-member
+    return focal_loss_value
 
 
-def plot_perf(perf_data, strat):
+def plot_perf(perf_data, strat):  # pylint: disable=too-many-locals, too-many-statements
+    """
+    Plot performance metrics (loss, accuracy, F1 score, precision) for a specific model strategy.
+
+    Args:
+        perf_data (List): List containing the performance data for the model.
+        strat (str): Model strategy ('cbfl', 'weighted_samp', 'none').
+
+    Returns:
+        None
+    """
 
     perf_data = np.array(perf_data)
-    train_losses, train_accs, train_cls_accs, train_f1s, train_precs, val_losses, val_accs, val_cls_accs, val_f1s, val_precs, random_accs, random_f1s, random_precs = perf_data
+    train_losses, train_accs, train_cls_accs, train_f1s, train_precs, val_losses, val_accs, val_cls_accs, val_f1s, val_precs, random_accs, random_f1s, random_precs = perf_data  # pylint: disable=line-too-long
 
-    if (strat == 'cbfl'):
+    if strat == 'cbfl':
         title = 'CLASS BALANCED FOCAL LOSS'
-    elif (strat == 'weighted_samp'):
+    elif strat == 'weighted_samp':
         title = 'WEIGHTED SAMPLING'
-    elif (strat == 'none'):
+    elif strat == 'none':
         title = 'NONE'
 
     plt.plot(train_losses)
@@ -304,9 +399,18 @@ def plot_perf(perf_data, strat):
 
 
 def plot_perf_comp(perf_data):
+    """
+    Plot and compare the performance metrics (F1 score and precision) for different models.
+
+    Args:
+        perf_data (List): List containing the performance data for each model.
+
+    Returns:
+        None
+    """
 
     perf_data = np.array(perf_data)
-    cbfl_f1s, cbfl_precs, cbfl_run_time, ws_f1s, ws_precs, ws_run_time, none_f1s, none_precs, none_run_time, random_f1s, random_precs = perf_data
+    cbfl_f1s, cbfl_precs, _, ws_f1s, ws_precs, _, none_f1s, none_precs, _, random_f1s, random_precs = perf_data  # pylint: disable=line-too-long
 
     plt.plot(cbfl_f1s)
     plt.plot(ws_f1s)
@@ -338,29 +442,61 @@ def plot_perf_comp(perf_data):
 
 
 def random_perf(val_loader, num_classes):
+    """
+    Calculate performance metrics (accuracy, F1 score, precision) of a random prediction baseline
+    for the given validation dataset.
+
+    Args:
+        val_loader (torch.utils.data.DataLoader): Validation data loader.
+        num_classes (int): Number of classes in the classification task.
+
+    Returns:
+        Tuple[float, float, float]: A tuple containing the following:
+            - accs.mean (float): Mean accuracy of random predictions.
+            - f1s.mean (float): Mean F1 score of random predictions.
+            - precs.mean (float): Mean precision of random predictions.
+    """
 
     accs = MeanMeter()
     f1s = MeanMeter()
     precs = MeanMeter()
 
-    for idx, (data, target) in enumerate(val_loader):
+    for _, (_, target) in enumerate(val_loader):
 
         preds = np.random.randint(0, num_classes, target.shape[0])
 
         acc = sklearn.metrics.accuracy_score(target, preds)
-        f1 = sklearn.metrics.f1_score(target, preds, average='macro')
+        f_1 = sklearn.metrics.f1_score(target, preds, average='macro')
         prec = sklearn.metrics.precision_score(
             target, preds, average='macro', zero_division=0)
 
         accs.update(acc, preds.shape[0])
-        f1s.update(f1, preds.shape[0])
+        f1s.update(f_1, preds.shape[0])
         precs.update(prec, preds.shape[0])
 
     return accs.mean, f1s.mean, precs.mean
 
 
-def run(batch_size=None, epochs=None, learning_rate=None,
-        weight_decay=None, momentum=None, beta=None, gamma=None, strat=None):
+def run(batch_size=None, epochs=None, learning_rate=None,  # pylint: disable=too-many-statements, too-many-locals, too-many-arguments
+        weight_decay=None, beta=None, gamma=None, strat=None):
+    """
+    Execute the complete training and evaluation pipeline.
+
+    Args:
+        batch_size (int): Batch size for training and validation.
+        epochs (int): Number of training epochs.
+        learning_rate (float): Learning rate for optimization.
+        weight_decay (float): Weight decay for optimization.
+        beta (float): Beta parameter for FocalLoss.
+        gamma (float): Gamma parameter for FocalLoss.
+        strat (str): Strategy for data loader and loss function.
+
+    Returns:
+        Tuple[List[float], List[float], float]: A tuple containing the following:
+            - val_f1s (List[float]): List of F1 scores for each validation epoch.
+            - val_precs (List[float]): List of precision scores for each validation epoch.
+            - run_time (float): Total execution time in seconds.
+    """
 
     dataloader_train, dataloader_val, class_sample_count = data_loader_mars(
         batch_size,
@@ -376,7 +512,6 @@ def run(batch_size=None, epochs=None, learning_rate=None,
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-    # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=learning_rate,
@@ -413,7 +548,7 @@ def run(batch_size=None, epochs=None, learning_rate=None,
 
         # validation loop
         val_loss, val_acc, val_cm, val_f1, val_prec = validate(
-            epoch, dataloader_val, model, criterion, num_classes)
+            dataloader_val, model, criterion, num_classes)
 
         # Random performance
         random_acc, random_f1, random_prec = random_perf(
@@ -444,12 +579,12 @@ def run(batch_size=None, epochs=None, learning_rate=None,
             best_cm = val_cm
             best_model = copy.deepcopy(model)
 
-    print('Best F1: {:.4f}'.format(best_f1))
-    print('Best Prec: {:.4f}'.format(best_prec))
+    print(f'Best F1: {best_f1:.4f}')
+    print(f'Best Prec: {best_prec:.4f}')
     per_cls_acc = best_cm.diag().detach().numpy().tolist()
 
     for i, acc_i in enumerate(per_cls_acc):
-        print("Best accuracy of class {}: {:.4f}".format(i, acc_i))
+        print(f"Best accuracy of class {i}: {acc_i:.4f}")
 
     print('')
 
@@ -479,15 +614,33 @@ def run(batch_size=None, epochs=None, learning_rate=None,
     return val_f1s, val_precs, run_time
 
 
-def train(epoch, data_loader, model, optimizer, criterion, num_classes):
+def train(epoch, data_loader, model, optimizer, criterion, num_classes):  # pylint: disable= too-many-arguments, too-many-locals
+    """
+    Train the model for one epoch using the provided data loader, optimizer, and criterion.
 
+    Args:
+        epoch (int): Current epoch number.
+        data_loader (torch.utils.data.DataLoader): Data loader for training data.
+        model (torch.nn.Module): Model to be trained.
+        optimizer: Optimizer used for training.
+        criterion: Loss function used for training.
+        num_classes (int): Number of classes in the classification task.
+
+    Returns:
+        Tuple[float, float, torch.Tensor, float, float]: A tuple containing the following:
+            - losses.mean (float): Mean loss over the training set.
+            - acc.mean (float): Mean accuracy over the training set.
+            - correlation_matrix (torch.Tensor): Correlation matrix of predicted classes.
+            - f1s.mean (float): Mean F1 score over the training set.
+            - precs.mean (float): Mean precision over the training set.
+    """
     iter_time = MeanMeter()
     losses = MeanMeter()
     acc = MeanMeter()
     f1s = MeanMeter()
     precs = MeanMeter()
 
-    cm = torch.zeros(num_classes, num_classes)
+    correlation_matrix = torch.zeros(num_classes, num_classes)  # pylint: disable=no-member
 
     for idx, (data, target) in enumerate(data_loader):
 
@@ -504,36 +657,53 @@ def train(epoch, data_loader, model, optimizer, criterion, num_classes):
         loss.backward()
         optimizer.step()
 
-        value, preds = out.max(dim=-1)
+        _, preds = out.max(dim=-1)
         batch_acc = sklearn.metrics.accuracy_score(target, preds)
-        f1 = sklearn.metrics.f1_score(target, preds, average='macro')
+        f_1 = sklearn.metrics.f1_score(target, preds, average='macro')
         prec = sklearn.metrics.precision_score(
             target, preds, average='macro', zero_division=0)
 
-        for t, p in zip(target.view(-1), preds.view(-1)):
-            cm[t.long(), p.long()] += 1
+        for target_view, pred_view in zip(target.view(-1), preds.view(-1)):
+            correlation_matrix[target_view.long(), pred_view.long()] += 1
 
         losses.update(loss, out.shape[0])
         acc.update(batch_acc, out.shape[0])
-        f1s.update(f1, out.shape[0])
+        f1s.update(f_1, out.shape[0])
         precs.update(prec, out.shape[0])
         iter_time.update(time.time() - start)
 
         if idx % 100 == 0:
             print((
-                'Epoch: [{0}][{1}/{2}]\t'
+                'Epoch: [{0}][{1}/{2}]\t'  # pylint: disable=consider-using-f-string
                 'Time {iter_time.val:.3f} ({iter_time.mean:.3f})\t'
                 'Loss {loss.val:.4f} ({loss.mean:.4f})\t'
                 'Accuracy {accu.val:.4f} ({accu.mean:.4f})\t').format(
                 epoch, idx, len(data_loader),
                 iter_time=iter_time, loss=losses, accu=acc))
 
-    cm = cm / cm.sum(1)
+    correlation_matrix = correlation_matrix / correlation_matrix.sum(1)
 
-    return losses.mean.detach().numpy(), acc.mean, cm, f1s.mean, precs.mean
+    return losses.mean.detach().numpy(), acc.mean, correlation_matrix, f1s.mean, precs.mean
 
 
-def validate(epoch, val_loader, model, criterion, num_classes):
+def validate(val_loader, model, criterion, num_classes):  # pylint: disable=too-many-locals
+    """
+    Perform validation on the given model using the provided validation data loader.
+
+    Args:
+        val_loader (torch.utils.data.DataLoader): Validation data loader.
+        model (torch.nn.Module): Model to be evaluated.
+        criterion: Loss function used for evaluation.
+        num_classes (int): Number of classes in the classification task.
+
+    Returns:
+        Tuple[float, float, torch.Tensor, float, float]: A tuple containing the following:
+            - losses.mean (float): Mean loss over the validation set.
+            - acc.mean (float): Mean accuracy over the validation set.
+            - correlation_matrix (torch.Tensor): Correlation matrix of predicted classes.
+            - f1s.mean (float): Mean F1 score over the validation set.
+            - precs.mean (float): Mean precision over the validation set.
+    """
 
     iter_time = MeanMeter()
     losses = MeanMeter()
@@ -541,9 +711,9 @@ def validate(epoch, val_loader, model, criterion, num_classes):
     f1s = MeanMeter()
     precs = MeanMeter()
 
-    cm = torch.zeros(num_classes, num_classes)
+    correlation_matrix = torch.zeros(num_classes, num_classes)  # pylint: disable=no-member
 
-    for idx, (data, target) in enumerate(val_loader):
+    for _, (data, target) in enumerate(val_loader):
         start = time.time()
 
         if torch.cuda.is_available():
@@ -555,52 +725,53 @@ def validate(epoch, val_loader, model, criterion, num_classes):
             out = model(data)
             loss = criterion(out, target)
 
-        value, preds = out.max(dim=-1)
+        _, preds = out.max(dim=-1)
         batch_acc = sklearn.metrics.accuracy_score(target, preds)
-        f1 = sklearn.metrics.f1_score(target, preds, average='macro')
+        f_1 = sklearn.metrics.f1_score(target, preds, average='macro')
         prec = sklearn.metrics.precision_score(
             target, preds, average='macro', zero_division=0)
 
-        for t, p in zip(target.view(-1), preds.view(-1)):
-            cm[t.long(), p.long()] += 1
+        for target_view, pred_view in zip(target.view(-1), preds.view(-1)):
+            correlation_matrix[target_view.long(), pred_view.long()] += 1
 
         losses.update(loss, out.shape[0])
         acc.update(batch_acc, out.shape[0])
-        f1s.update(f1, out.shape[0])
+        f1s.update(f_1, out.shape[0])
         precs.update(prec, out.shape[0])
         iter_time.update(time.time() - start)
 
-    cm = cm / cm.sum(1)
-    per_cls_acc = cm.diag().detach().numpy().tolist()
+    correlation_matrix = correlation_matrix / correlation_matrix.sum(1)
+    per_cls_acc = correlation_matrix.diag().detach().numpy().tolist()
 
     print("")
     print("Validation Metrics:")
 
     for i, acc_i in enumerate(per_cls_acc):
-        print("Accuracy mean of class {}: {:.4f}".format(i, acc_i))
+        print(f"Accuracy mean of class {i}: {acc_i:.4f}")
 
-    print(("Accuracy mean total: {accuracy.mean:.4f}").format(accuracy=acc))
-    print(("Loss mean: {loss.mean:.4f}").format(loss=losses))
-    print(("F1 mean: {F1.mean:.4f}").format(F1=f1s))
-    print(("Prec mean: {PREC.mean:.4f}").format(PREC=precs))
+    print(f"Accuracy mean total: {acc.mean:.4f}")
+    print(f"Loss mean: {losses.mean:.4f}")
+    print(f"F1 mean: {f1s.mean:.4f}")
+    print(f"Prec mean: {precs.mean:.4f}")
     print("")
 
-    return losses.mean.detach().numpy(), acc.mean, cm, f1s.mean, precs.mean
+    return losses.mean.detach().numpy(), acc.mean, correlation_matrix, f1s.mean, precs.mean
 
 
-def main():
+def main():  # pylint: disable=too-many-locals
+    """main"""
 
     cbfl_f1s, cbfl_precs, cbfl_run_time = run(
         batch_size=64, epochs=10, learning_rate=0.00001, weight_decay=0.001,
-        momentum=0.9, beta=0.9999, gamma=1.0, strat='cbfl')
+        beta=0.9999, gamma=1.0, strat='cbfl')
     ws_f1s, ws_precs, ws_run_time = run(
         batch_size=64, epochs=10, learning_rate=0.00001, weight_decay=0.001,
-        momentum=0.9, beta=0.9999, gamma=1.0, strat='weighted_samp')
+        beta=0.9999, gamma=1.0, strat='weighted_samp')
     none_f1s, none_precs, none_run_time = run(
         batch_size=64, epochs=10, learning_rate=0.00001, weight_decay=0.001,
-        momentum=0.9, beta=0.9999, gamma=1.0, strat='none')
+        beta=0.9999, gamma=1.0, strat='none')
 
-    dataloader_train, dataloader_val, class_sample_count = data_loader_mars(
+    _, dataloader_val, class_sample_count = data_loader_mars(
         64, 'none')
     num_classes = len(class_sample_count)
 
@@ -608,7 +779,7 @@ def main():
     random_f1s = []
     random_precs = []
 
-    for epoch in range(10):
+    for _ in range(10):
         random_acc, random_f1, random_prec = random_perf(
             dataloader_val, num_classes)
         random_accs.append(random_acc)

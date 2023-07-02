@@ -74,4 +74,5 @@ The following commands can be executed from the root of the project:
   Running this command will produce a model and various performance plots of the model. 
 
 ## TODO
-- Include more technical details.
+- Make code better.
+- Make technical report better.
